@@ -23,7 +23,7 @@ jobs:
       - run: make docker_verify TAG=${IMAGE}:${CIRCLE_SHA1}
   deploy:
     docker:
-      - image: mcr.microsoft.com/azure-cli:latest
+       - image: cimg/azure:2026.10
     steps:
       - checkout
       # - run: make oidc_debug     # podgląd iss/sub/aud tokenu OIDC (diagnostyka)
