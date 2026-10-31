@@ -40,9 +40,9 @@ jobs:
     steps:
       # Tymczasowy krok do odczytu iss/sub/aud tokenu OIDC (README, krok 2.1).
       # Odkomentuj przy pierwszej konfiguracji, potem usuń.
-      # - run:
-      #     name: Debug OIDC
-      #     command: echo "$CIRCLE_OIDC_TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null; echo
+      - run:
+          name: Debug OIDC
+          command: echo "$CIRCLE_OIDC_TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null; echo
       - run:
           name: Login do Azure (OIDC, managed identity)
           # $CIRCLE_OIDC_TOKEN jest wystawiany tylko w jobach z context: (tu: azure)
