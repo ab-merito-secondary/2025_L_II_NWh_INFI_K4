@@ -1,18 +1,87 @@
 version: 2.1
+
+# CI/CD: build -> test -> lint -> push na Docker Hub -> deploy do Azure Container Apps
+# Deploy uruchamia się tylko na gałęzi main, po udanym build-and-test.
+# Logowanie do Azure: managed identity + OIDC (bez sekretów). Kontekst azure: AZURE_CLIENT_ID, AZURE_TENANT_ID.
+
 jobs:
   build-and-test:
     machine:
-      image: ubuntu-2204:2024.11.1
+      image: ubuntu-2204:current
       docker_layer_caching: true
+    environment:
+      IMAGE: aleksanderbuczek/hello-world-printer
     steps:
       - checkout
       - run: make deps
-      - run: make lint
       - run: make test
-      - run: make docker_build
-      - run: make docker_push
+      - run: make lint
+      - run:
+          name: Build i push z tagiem SHA
+          # Zmienna z linii poleceń nadpisuje TAG z Makefile
+          command: make docker_push TAG=${IMAGE}:${CIRCLE_SHA1}
+      - run:
+          name: Push latest (bez ponownego builda)
+          # -o docker_build = traktuj docker_build jako aktualny, nie uruchamiaj go ponownie
+          command: make -o docker_build docker_push
+      - run:
+          name: Weryfikacja obrazu na Docker Hub
+          # Makefile łączy komendy przez ';', więc nieudany push nie przerywa joba.
+          # Ten krok gwarantuje, że obraz z tagiem SHA naprawdę istnieje.
+          command: docker manifest inspect ${IMAGE}:${CIRCLE_SHA1} > /dev/null
+
+  deploy:
+    docker:
+      - image: mcr.microsoft.com/azure-cli:latest
+    environment:
+      RESOURCE_GROUP: hello-rg
+      APP_NAME: hello-world-printer
+      IMAGE: docker.io/aleksanderbuczek/hello-world-printer
+    steps:
+      # Tymczasowy krok do odczytu iss/sub/aud tokenu OIDC (README, krok 2.1).
+      # Odkomentuj przy pierwszej konfiguracji, potem usuń.
+      # - run:
+      #     name: Debug OIDC
+      #     command: echo "$CIRCLE_OIDC_TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null; echo
+      - run:
+          name: Login do Azure (OIDC, managed identity)
+          # $CIRCLE_OIDC_TOKEN jest wystawiany tylko w jobach z context: (tu: azure)
+          command: |
+            az login --service-principal \
+              -u "$AZURE_CLIENT_ID" \
+              --tenant "$AZURE_TENANT_ID" \
+              --federated-token "$CIRCLE_OIDC_TOKEN" \
+              --output none
+            az config set extension.use_dynamic_install=yes_without_prompt
+      - run:
+          name: Deploy do Container Apps
+          command: |
+            az containerapp update \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE:${CIRCLE_SHA1}" \
+              --revision-suffix "${CIRCLE_SHA1:0:7}"
+      - run:
+          name: Smoke test
+          command: |
+            FQDN=$(az containerapp show -n "$APP_NAME" -g "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn -o tsv)
+            echo "Sprawdzam https://$FQDN/"
+            for i in $(seq 1 10); do
+              curl -fsS "https://$FQDN/" && exit 0
+              sleep 5
+            done
+            echo "Aplikacja nie odpowiada" && exit 1
+
 workflows:
-  basic:
+  build-deploy:
     jobs:
       - build-and-test:
          context: dockerhub
+      - deploy:
+          context: azure
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: master
