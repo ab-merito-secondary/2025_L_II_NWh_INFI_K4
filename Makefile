@@ -22,3 +22,5 @@ docker_push: docker_build
 	echo "$${DOCKER_PASSWORD}" | docker login --username $(USERNAME) --password-stdin; \
 	docker tag hello-world-printer $(TAG); \
 	docker push $(TAG)
+docker_manifest:
+	docker manifest inspect $TAG

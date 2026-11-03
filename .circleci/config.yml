@@ -13,22 +13,28 @@ jobs:
       IMAGE: aleksanderbuczek/hello-world-printer
     steps:
       - checkout
-      - run: make deps
-      - run: make test
-      - run: make lint
+      - run: 
+          name: Instalacja zależności
+          command: make deps
+      - run: 
+          name: Wykonanie testów
+          command: make test
+      - run: 
+          name: Linting
+          command: make lint
       - run:
-          name: Build i push z tagiem SHA
+          name: Build i push obrazu z tagiem SHA
           # Zmienna z linii poleceń nadpisuje TAG z Makefile
           command: make docker_push TAG=${IMAGE}:${CIRCLE_SHA1}
       - run:
-          name: Push latest (bez ponownego builda)
+          name: Push obrazu z tagiem latest (bez ponownego builda)
           # -o docker_build = traktuj docker_build jako aktualny, nie uruchamiaj go ponownie
           command: make -o docker_build docker_push
       - run:
           name: Weryfikacja obrazu na Docker Hub
           # Makefile łączy komendy przez ';', więc nieudany push nie przerywa joba.
           # Ten krok gwarantuje, że obraz z tagiem SHA naprawdę istnieje.
-          command: docker manifest inspect ${IMAGE}:${CIRCLE_SHA1} > /dev/null
+          command: docker_manifest TAG=${IMAGE}:${CIRCLE_SHA1} > /dev/null
 
   deploy:
     docker:
