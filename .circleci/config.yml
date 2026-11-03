@@ -34,7 +34,7 @@ jobs:
           name: Weryfikacja obrazu na Docker Hub
           # Makefile łączy komendy przez ';', więc nieudany push nie przerywa joba.
           # Ten krok gwarantuje, że obraz z tagiem SHA naprawdę istnieje.
-          command: docker_manifest TAG=${IMAGE}:${CIRCLE_SHA1} > /dev/null
+          command: make docker_manifest TAG=${IMAGE}:${CIRCLE_SHA1} > /dev/null
 
   deploy:
     docker:
